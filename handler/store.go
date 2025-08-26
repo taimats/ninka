@@ -10,6 +10,10 @@ var (
 	ErrNotFound      = errors.New("not found")
 )
 
+var clientStore = NewStore[string, *Client]("client")
+var sessionStore = NewStore[string, string]("session")
+var authcodeStore = NewStore[string, AuthCode]("authcode")
+
 type Store[K comparable, V any] struct {
 	mux  *sync.Mutex
 	Name string
