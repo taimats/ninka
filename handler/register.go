@@ -43,7 +43,7 @@ func RegisterHanlder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var cl Client
-	err := json.NewEncoder(w).Encode(&cl)
+	err := json.NewDecoder(r.Body).Decode(&cl)
 	if err != nil {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return

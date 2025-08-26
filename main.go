@@ -25,6 +25,7 @@ func main() {
 		Handler: mux,
 	}
 	go func() {
+		log.Printf("server listening on %s...\n", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal(err)
 		}
