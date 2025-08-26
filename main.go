@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/taimats/ninka/handler"
@@ -25,16 +24,16 @@ func main() {
 		Handler: mux,
 	}
 	go func() {
-		log.Printf("server listening on %s...\n", srv.Addr)
+		log.Printf("server listening on port %s\n", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal(err)
 		}
 	}()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
 
-	<-quit
+	<-ctx.Done()
 	log.Println("Server shutting down...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
