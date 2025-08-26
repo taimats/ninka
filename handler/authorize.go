@@ -91,9 +91,9 @@ func AuthorizeHanler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ar := NewAuthRequest(r)
-	msg, statusCode := ar.Validate()
-	if msg != "" {
-		http.Error(w, msg, statusCode)
+	errMsg, statusCode := ar.Validate()
+	if errMsg != "" {
+		http.Error(w, errMsg, statusCode)
 		return
 	}
 	code, err := generateRandomStr(rand.Reader, 32)
