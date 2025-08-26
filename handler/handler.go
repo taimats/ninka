@@ -121,8 +121,8 @@ func registerHanlder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var cl *Client
-	err := json.NewEncoder(w).Encode(cl)
+	var cl Client
+	err := json.NewEncoder(w).Encode(&cl)
 	if err != nil {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
@@ -139,7 +139,7 @@ func registerHanlder(w http.ResponseWriter, r *http.Request) {
 	}
 	cl.Secret = Password(hashedPass)
 
-	if err := clientStore.Add(cl.ID, cl); err != nil {
+	if err := clientStore.Add(cl.ID, &cl); err != nil {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
