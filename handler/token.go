@@ -20,7 +20,7 @@ const (
 	contentTypeUrlEncoded = "application/x-www-form-urlencoded"
 )
 
-var jwtSignedKey = os.Getenv("JWT_SIGNED_KEY")
+var jwtSignedKey = []byte(os.Getenv("JWT_SIGNED_KEY"))
 
 type TokenRequest struct {
 	GrantType    string `json:"grant_type"`

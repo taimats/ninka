@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/taimats/ninka/handler"
 	"golang.org/x/crypto/bcrypt"
@@ -47,14 +48,14 @@ func newJSONBody[T any](t *testing.T, v T) io.Reader {
 	return &r
 }
 
-func newJSONString[T any](t *testing.T, v T) string {
-	var r bytes.Buffer
-	err := json.NewEncoder(&r).Encode(v)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return r.String()
-}
+// func newJSONString[T any](t *testing.T, v T) string {
+// 	var r bytes.Buffer
+// 	err := json.NewEncoder(&r).Encode(v)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	return r.String()
+// }
 
 func cleanupStore[K comparable, V any](t *testing.T, s *handler.Store[K, V]) {
 	t.Helper()
@@ -200,10 +201,19 @@ func TestLoginHandler(t *testing.T) {
 
 func TestAuthorizeHandler(t *testing.T) {
 	cl := handler.NewClient("test", "test_secret", "http://localhost:8080/test")
-	handler.ClientStore.Add(cl.ID, cl)
+	hashed, err := bcrypt.GenerateFromPassword([]byte("test_secret"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cl.Secret = handler.Password(hashed)
+	if err := handler.ClientStore.Add(cl.ID, cl); err != nil {
+		t.Fatal(err)
+	}
 
 	sessionID := "session_test"
-	handler.SessionStore.Add(sessionID, cl.ID)
+	if err := handler.SessionStore.Add(sessionID, cl.ID); err != nil {
+		t.Fatal(err)
+	}
 
 	q := &url.Values{}
 	q.Add("response_type", "code")
@@ -278,20 +288,41 @@ func TestAuthorizeHandler(t *testing.T) {
 
 func TestTokenHandler(t *testing.T) {
 	cl := handler.NewClient("test", "test_secret", "http://localhost:8080/test")
-	handler.ClientStore.Add(cl.ID, cl)
+	hashed, err := bcrypt.GenerateFromPassword([]byte("test_secret"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cl.Secret = handler.Password(hashed)
+	err = handler.ClientStore.Add(cl.ID, cl)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	sessionID := "session_test"
 	handler.SessionStore.Add(sessionID, cl.ID)
 
+	code := "test_code"
+	authcode := handler.AuthCode{
+		ClientID:            cl.ID,
+		UserID:              cl.ID,
+		RedirectURI:         cl.RedirectTo,
+		CodeChallenge:       "test_challenge",
+		CodeChallengeMethod: "",
+		Nonce:               "nonce_test",
+		Scope:               "openid",
+		ExpireAt:            time.Now().Add(5 * time.Minute),
+	}
+	handler.AuthcodeStore.Add(code, authcode)
+
 	q := &url.Values{}
-	q.Add("response_type", "code")
-	q.Add("client_id", "test")
-	q.Add("redirect_uri", "http://localhost:8080/test")
-	q.Add("state", "state_test")
-	q.Add("scope", "openid")
-	q.Add("code_challenge", "test_challenge")
-	q.Add("code_challenge_method", "S256")
-	q.Add("nonce", "nonce_test")
+	q.Add("grant_type", "authorization_code")
+	q.Add("client_id", cl.ID)
+	q.Add("client_secret", "test_secret")
+	q.Add("code", code)
+	q.Add("redirect_uri", cl.RedirectTo)
+	q.Add("code_verifier", "test_challenge")
+
+	t.Setenv("JWT_SIGNED_KEY", "test_secret_key")
 
 	tests := []struct {
 		desc string
@@ -302,12 +333,12 @@ func TestTokenHandler(t *testing.T) {
 			desc: "pass_01",
 			req: testRequest{
 				method: "POST",
-				path:   fmt.Sprintf("/authorize?%s", q.Encode()),
+				path:   fmt.Sprintf("/token?%s", q.Encode()),
 				body:   "",
 			},
 			want: wantResponse{
 				body:       "",
-				statusCode: http.StatusFound,
+				statusCode: http.StatusOK,
 			},
 		},
 	}
@@ -322,33 +353,18 @@ func TestTokenHandler(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			req.AddCookie(&http.Cookie{
-				Name:     "session_id",
-				Value:    sessionID,
-				Path:     "/",
-				HttpOnly: true,
-			})
+			req.Header.Set("Content-Type", handler.ContentTypeUrlEncoded)
 
-			res, body := testHandler(t, handler.AuthorizeHanler, req)
+			res, body := testHandler(t, handler.TokenHandler, req)
 
-			if body != tt.want.body {
+			if body == "" {
 				t.Errorf("Body is not equal: (got=%s, want=%s)\n", body, tt.want.body)
 			}
 			if res.StatusCode != tt.want.statusCode {
 				t.Errorf("StatusCode is not equal: (got=%d, want=%d)\n", res.StatusCode, tt.want.statusCode)
 			}
-			url, err := res.Location()
-			if err != nil {
-				t.Errorf("redirect location is not set: (got=%s)", url.String())
-			}
-			if url.Query().Get("code") == "" {
-				t.Errorf("query code should be included: (got=%s)", url.Query().Get("code"))
-			}
-			if url.Query().Get("state") == "" {
-				t.Errorf("query state should be included: (got=%s)", url.Query().Get("state"))
-			}
-			if len(handler.AuthcodeStore.Data) == 0 {
-				t.Errorf("authcodeStore should not be empty: (length: %d)", len(handler.AuthcodeStore.Data))
+			if len(handler.AuthcodeStore.Data) > 0 {
+				t.Errorf("authcodeStore should be empty: (length: %d)", len(handler.AuthcodeStore.Data))
 			}
 		})
 	}

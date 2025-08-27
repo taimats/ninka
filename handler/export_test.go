@@ -5,3 +5,8 @@ var (
 	SessionStore  = sessionStore
 	AuthcodeStore = authcodeStore
 )
+
+var (
+	ContentTypeJSON       = contentTypeJSON
+	ContentTypeUrlEncoded = contentTypeUrlEncoded
+)
