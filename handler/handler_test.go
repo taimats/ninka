@@ -34,7 +34,9 @@ func testHandler(t *testing.T, h http.HandlerFunc, r *http.Request) (res *http.R
 
 	res = w.Result()
 	var buf bytes.Buffer
-	io.Copy(&buf, res.Body)
+	if _, err := io.Copy(&buf, res.Body); err != nil {
+		t.Fatal(err)
+	}
 
 	return res, buf.String()
 }
@@ -139,8 +141,7 @@ func TestLoginHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 	cl.Secret = handler.Password(hashed)
-	err = handler.ClientStore.Add(cl.ID, cl)
-	if err != nil {
+	if err = handler.ClientStore.Add(cl.ID, cl); err != nil {
 		t.Fatal(err)
 	}
 	q := &url.Values{}
@@ -293,13 +294,14 @@ func TestTokenHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 	cl.Secret = handler.Password(hashed)
-	err = handler.ClientStore.Add(cl.ID, cl)
-	if err != nil {
+	if err = handler.ClientStore.Add(cl.ID, cl); err != nil {
 		t.Fatal(err)
 	}
 
 	sessionID := "session_test"
-	handler.SessionStore.Add(sessionID, cl.ID)
+	if err = handler.SessionStore.Add(sessionID, cl.ID); err != nil {
+		t.Fatal(err)
+	}
 
 	code := "test_code"
 	authcode := handler.AuthCode{
@@ -312,7 +314,9 @@ func TestTokenHandler(t *testing.T) {
 		Scope:               "openid",
 		ExpireAt:            time.Now().Add(5 * time.Minute),
 	}
-	handler.AuthcodeStore.Add(code, authcode)
+	if err = handler.AuthcodeStore.Add(code, authcode); err != nil {
+		t.Fatal(err)
+	}
 
 	q := &url.Values{}
 	q.Add("grant_type", "authorization_code")
