@@ -275,3 +275,81 @@ func TestAuthorizeHandler(t *testing.T) {
 		})
 	}
 }
+
+func TestTokenHandler(t *testing.T) {
+	cl := handler.NewClient("test", "test_secret", "http://localhost:8080/test")
+	handler.ClientStore.Add(cl.ID, cl)
+
+	sessionID := "session_test"
+	handler.SessionStore.Add(sessionID, cl.ID)
+
+	q := &url.Values{}
+	q.Add("response_type", "code")
+	q.Add("client_id", "test")
+	q.Add("redirect_uri", "http://localhost:8080/test")
+	q.Add("state", "state_test")
+	q.Add("scope", "openid")
+	q.Add("code_challenge", "test_challenge")
+	q.Add("code_challenge_method", "S256")
+	q.Add("nonce", "nonce_test")
+
+	tests := []struct {
+		desc string
+		req  testRequest
+		want wantResponse
+	}{
+		{
+			desc: "pass_01",
+			req: testRequest{
+				method: "POST",
+				path:   fmt.Sprintf("/authorize?%s", q.Encode()),
+				body:   "",
+			},
+			want: wantResponse{
+				body:       "",
+				statusCode: http.StatusFound,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			t.Cleanup(func() {
+				cleanupStore(t, handler.SessionStore)
+				cleanupStore(t, handler.ClientStore)
+				cleanupStore(t, handler.AuthcodeStore)
+			})
+			req, err := http.NewRequest(tt.req.method, tt.req.path, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.AddCookie(&http.Cookie{
+				Name:     "session_id",
+				Value:    sessionID,
+				Path:     "/",
+				HttpOnly: true,
+			})
+
+			res, body := testHandler(t, handler.AuthorizeHanler, req)
+
+			if body != tt.want.body {
+				t.Errorf("Body is not equal: (got=%s, want=%s)\n", body, tt.want.body)
+			}
+			if res.StatusCode != tt.want.statusCode {
+				t.Errorf("StatusCode is not equal: (got=%d, want=%d)\n", res.StatusCode, tt.want.statusCode)
+			}
+			url, err := res.Location()
+			if err != nil {
+				t.Errorf("redirect location is not set: (got=%s)", url.String())
+			}
+			if url.Query().Get("code") == "" {
+				t.Errorf("query code should be included: (got=%s)", url.Query().Get("code"))
+			}
+			if url.Query().Get("state") == "" {
+				t.Errorf("query state should be included: (got=%s)", url.Query().Get("state"))
+			}
+			if len(handler.AuthcodeStore.Data) == 0 {
+				t.Errorf("authcodeStore should not be empty: (length: %d)", len(handler.AuthcodeStore.Data))
+			}
+		})
+	}
+}

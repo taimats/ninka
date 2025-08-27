@@ -78,22 +78,22 @@ func (tr *TokenRequest) Validate() (authcode AuthCode, errMsg string, statusCode
 	}
 	if authcode.CodeChallenge == "" {
 		if tr.CodeVerifier != "" {
-			return AuthCode{}, "PKCF failed", http.StatusBadRequest
+			return AuthCode{}, "PKCE failed", http.StatusBadRequest
 		}
 	}
 	if tr.CodeVerifier == "" {
-		return AuthCode{}, "PKCF failed", http.StatusBadRequest
+		return AuthCode{}, "PKCE failed", http.StatusBadRequest
 	}
 	switch authcode.CodeChallengeMethod {
 	case "S256":
 		src := sha256.Sum256([]byte(tr.CodeVerifier))
 		target := base64.RawURLEncoding.EncodeToString(src[:])
 		if authcode.CodeChallenge != target {
-			return AuthCode{}, "PKCF failed", http.StatusBadRequest
+			return AuthCode{}, "PKCE failed", http.StatusBadRequest
 		}
 	case "plain":
 		if tr.CodeVerifier != authcode.CodeChallenge {
-			return AuthCode{}, "PKCF failed", http.StatusBadRequest
+			return AuthCode{}, "PKCE failed", http.StatusBadRequest
 		}
 	}
 	return authcode, "", 0
