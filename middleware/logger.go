@@ -2,6 +2,9 @@ package middleware
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -15,9 +18,68 @@ var bufpool = &sync.Pool{
 	},
 }
 
+type JSONIndentHandler struct {
+	h   slog.Handler
+	out io.Writer //out from logging
+	mu  *sync.Mutex
+	buf *bytes.Buffer
+}
+
+var _ slog.Handler = (*JSONIndentHandler)(nil)
+
+func NewJSONIndentHandler(out io.Writer, opts *slog.HandlerOptions) *JSONIndentHandler {
+	var buf bytes.Buffer
+	return &JSONIndentHandler{
+		h:   slog.NewJSONHandler(&buf, opts),
+		out: out,
+		mu:  &sync.Mutex{},
+		buf: &buf,
+	}
+}
+
+func (i *JSONIndentHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return i.h.Enabled(ctx, level)
+}
+
+func (i *JSONIndentHandler) Handle(ctx context.Context, record slog.Record) error {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+
+	if err := i.h.Handle(ctx, record); err != nil {
+		return err
+	}
+
+	encoder := json.NewEncoder(i.out)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(json.RawMessage(i.buf.Bytes())); err != nil {
+		return fmt.Errorf("failed to Encode in the JSON format: %w", err)
+	}
+	i.buf.Reset()
+	return nil
+}
+
+func (i *JSONIndentHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &JSONIndentHandler{
+		h:   i.h.WithAttrs(attrs),
+		out: i.out,
+		mu:  i.mu,
+		buf: i.buf,
+	}
+}
+
+func (i *JSONIndentHandler) WithGroup(name string) slog.Handler {
+	return &JSONIndentHandler{
+		h:   i.h.WithGroup(name),
+		out: i.out,
+		mu:  i.mu,
+		buf: i.buf,
+	}
+}
+
 func Logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		buf := bufpool.Get().(*bytes.Buffer)
+		defer buf.Reset()
 		defer bufpool.Put(buf)
 
 		ww := newWrappedWriter(w, buf)
