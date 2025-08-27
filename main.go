@@ -4,24 +4,30 @@ import (
 	"context"
 	"errors"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
 
 	"github.com/taimats/ninka/handler"
+	"github.com/taimats/ninka/middleware"
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/register", handler.RegisterHanlder)
 	mux.HandleFunc("/login", handler.LoginHandler)
 	mux.HandleFunc("/authorize", handler.AuthorizeHanler)
 	mux.HandleFunc("/token", handler.TokenHandler)
 
+	h := middleware.Use(mux, middleware.Logging)
+
 	srv := &http.Server{
 		Addr:    ":8080",
-		Handler: mux,
+		Handler: h,
 	}
 	go func() {
 		log.Printf("server listening on port %s\n", srv.Addr)
