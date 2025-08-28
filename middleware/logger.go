@@ -103,7 +103,7 @@ func Logging(next http.Handler) http.Handler {
 			)
 		}
 		if 500 <= statusCode && statusCode < 600 {
-			logger.LogAttrs(r.Context(), slog.LevelWarn, "client error",
+			logger.LogAttrs(r.Context(), slog.LevelWarn, "server error",
 				slog.String("error", errMsg),
 			)
 		}
