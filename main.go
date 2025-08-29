@@ -26,8 +26,10 @@ func main() {
 	h := middleware.Use(mux, middleware.Logging)
 
 	srv := &http.Server{
-		Addr:    ":8080",
-		Handler: h,
+		Addr:        ":8080",
+		Handler:     http.TimeoutHandler(h, time.Second, ""),
+		ReadTimeout: 500 * time.Millisecond,
+		IdleTimeout: time.Second,
 	}
 	go func() {
 		log.Printf("server listening on port %s\n", srv.Addr)
